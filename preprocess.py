@@ -190,7 +190,7 @@ def preprocess(rows):
         (preprocess_subtitle, ()),
         (
             preprocess_text_values,
-            ("title", "long_title", "more_title", "description"),
+            ("title", "long_title", "sub_title", "more_title", "description"),
         ),
         (
             create_count_encoding_feature,
