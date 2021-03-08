@@ -1,5 +1,6 @@
 import argparse
 import csv
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -96,6 +97,69 @@ def create_one_hot_encoding(rows_train, rows_test, fields_thresholds):
     return features_train, features_test
 
 
+def length_mm(length_str, length_unit):
+    if length_unit == "cm":
+        return float(length_str) * 10
+    else:  # case "mm". consider "" to "mm".
+        return float(length_str)
+
+
+def search_length_pattern(string, prefix):
+    number_pattern = r"(\d+|\d+\.\d+)"
+    unit_pattern = r"(cm|mm)"
+    first_pattern = f"{prefix} {number_pattern}{unit_pattern}"
+    second_pattern = f"{prefix} {number_pattern}"  # missing unit case
+
+    if m := re.search(first_pattern, string):
+        return m[1], m[2]
+    elif m := re.search(second_pattern, string):
+        return m[1], None
+    return None, None
+
+
+def extract_sizes_mm(size_str):
+    """
+    >>> extract_sizes_mm("h 105mm × w 63mm")
+    (105.0, 63.0)
+    >>> extract_sizes_mm("h mm × w mm")
+    (None, None)
+    >>> extract_sizes_mm("h 11cm × w 9.5cm")
+    (110.0, 95.0)
+    >>> extract_sizes_mm("w 180mm × h 266mm")
+    (266.0, 180.0)
+    >>> extract_sizes_mm("h 196.8cm × w 74.3cm × d 4.5cm")
+    (1968.0, 743.0)
+    >>> extract_sizes_mm("h 52.1cm")
+    (521.0, None)
+    >>> extract_sizes_mm("h 105mm × w mm")
+    (105.0, None)
+    >>> extract_sizes_mm("h 47mm × w 81")
+    (47.0, 81.0)
+    >>> extract_sizes_mm("h 116")
+    (116.0, None)
+    """
+    height, width = None, None
+
+    height_str, height_unit = search_length_pattern(size_str, "h")
+    if height_str:
+        height = length_mm(height_str, height_unit)
+
+    width_str, width_unit = search_length_pattern(size_str, "w")
+    if width_str:
+        width = length_mm(width_str, width_unit)
+
+    return height, width
+
+
+def preprocess_subtitle(rows):
+    features = []
+    for row in rows:
+        height, width = extract_sizes_mm(row["sub_title"])
+        new_row = {"size_h": height or "", "size_w": width or ""}
+        features.append(new_row)
+    return features
+
+
 def merge(rows1, rows2):
     """
     >>> rows1 = [{"a": 100}, {"a": 50}]
@@ -123,9 +187,10 @@ def preprocess(rows):
                 "dating_year_late": float,
             },
         ),
+        (preprocess_subtitle, ()),
         (
             preprocess_text_values,
-            ("title", "long_title", "sub_title", "more_title", "description"),
+            ("title", "long_title", "more_title", "description"),
         ),
         (
             create_count_encoding_feature,
@@ -135,7 +200,10 @@ def preprocess(rows):
 
     output_rows = [{} for _ in range(len(rows))]
     for func, fields in preprocess_functions:
-        preprocessed = func(rows, fields)
+        if fields:
+            preprocessed = func(rows, fields)
+        else:
+            preprocessed = func(rows)
         assert len(preprocessed) == len(rows), func.__name__
 
         output_rows = merge(output_rows, preprocessed)
