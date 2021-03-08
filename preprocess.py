@@ -155,7 +155,7 @@ def preprocess_data_files(input_root, output_root):
     features_train, features_test = create_one_hot_encoding(
         rows_train,
         rows_test,
-        (("acquisition_method", 200), ("principal_maker", 30)),
+        (("acquisition_method", 20), ("principal_maker", 20)),
     )
 
     rows_train = preprocess(rows_train)
