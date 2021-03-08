@@ -84,7 +84,12 @@ if __name__ == "__main__":
 
     y = load_target_variable(args.target_containing_file)
 
-    float_fields = ("dating_year_early", "dating_year_late")
+    float_fields = (
+        "dating_year_early",
+        "dating_year_late",
+        "size_h",
+        "size_w",
+    )
     X = {}
     for data_type in ("train", "test"):
         X[data_type] = load_features(
