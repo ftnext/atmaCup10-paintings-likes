@@ -3,7 +3,9 @@ import csv
 import re
 from collections import Counter
 from pathlib import Path
+from typing import Optional
 
+from fasttext import load_model
 from sklearn.preprocessing import OneHotEncoder
 
 
@@ -160,6 +162,30 @@ def preprocess_subtitle(rows):
     return features
 
 
+def identify_language(text: str) -> Optional[str]:
+    """
+    >>> identify_language("Still Life")  # doctest: +SKIP
+    '__label__en'
+    >>> identify_language("")
+    """
+    if text == "":
+        return None  # ""はEnglishとして判定された（誤りになりそう）
+    # \nを含むと ValueError: predict processes one line at a time (remove '\n')
+    pred = LANGUAGE_IDENTIFIER.predict(re.sub("\n", " ", text))
+    return pred[0][0]
+
+
+def preprocess_language_information(rows, fields):
+    features = []
+    for row in rows:
+        new_row = {}
+        for field in fields:
+            # 空文字列（欠損値）の処理結果は、空文字列として欠損を表す
+            new_row[f"{field}__lang"] = identify_language(row[field]) or ""
+        features.append(new_row)
+    return features
+
+
 def merge(rows1, rows2):
     """
     >>> rows1 = [{"a": 100}, {"a": 50}]
@@ -169,6 +195,9 @@ def merge(rows1, rows2):
     >>> assert actual == expected
     >>> assert rows1 == [{"a": 100}, {"a": 50}]  # copyしたので中身は変わらない
     """
+    assert len(rows1) == len(
+        rows2
+    ), f"Length not equal: {len(rows1)}, {len(rows2)}"
     merged = []
     for row1, row2 in zip(rows1, rows2):
         row = row1.copy()
@@ -211,44 +240,79 @@ def preprocess(rows):
     return output_rows
 
 
-def preprocess_data_files(input_root, output_root):
-    with (input_root / "train.csv").open() as f_train, (
-        input_root / "test.csv"
-    ).open() as f_test:
-        reader_train = csv.DictReader(f_train)
-        rows_train = list(reader_train)
-        reader_test = csv.DictReader(f_test)
-        rows_test = list(reader_test)
+def add_features(rows_train, rows_test):
+    added = {}
+    for key, rows in {"train": rows_train, "test": rows_test}.items():
+        new_features = preprocess_language_information(
+            rows, ("title", "long_title", "more_title", "description")
+        )
+        new_rows = merge(rows, new_features)
+        added[key] = new_rows
+    return added["train"], added["test"]
+
+
+def load_data(file_path):
+    with file_path.open() as fin:
+        reader = csv.DictReader(fin)
+        return list(reader)
+
+
+def dump_data(file_path, rows):
+    field_names = rows[0].keys()
+    with file_path.open("w") as fout:
+        writer = csv.DictWriter(fout, field_names)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def preprocess_data_files(input_root, output_root, intermediate_root=None):
+    rows_train = load_data(input_root / "train.csv")
+    rows_test = load_data(input_root / "test.csv")
+
+    rows_train, rows_test = add_features(rows_train, rows_test)
+    if intermediate_root:
+        dump_data(intermediate_root / "train.csv", rows_train)
+        dump_data(intermediate_root / "test.csv", rows_test)
 
     features_train, features_test = create_one_hot_encoding(
         rows_train,
         rows_test,
-        (("acquisition_method", 20), ("principal_maker", 20)),
+        (
+            ("acquisition_method", 20),
+            ("principal_maker", 20),
+            ("title__lang", 10),
+            ("long_title__lang", 10),
+            ("more_title__lang", 10),
+            ("description__lang", 10),
+        ),
     )
 
     rows_train = preprocess(rows_train)
     rows_train = merge(rows_train, features_train)
     rows_test = preprocess(rows_test)
-    rows_test = merge(rows_test, features_train)
+    rows_test = merge(rows_test, features_test)
 
-    field_names = rows_train[0].keys()
-    with (output_root / "train.csv").open("w") as f_train, (
-        output_root / "test.csv"
-    ).open("w") as f_test:
-        writer_train = csv.DictWriter(f_train, field_names)
-        writer_train.writeheader()
-        writer_train.writerows(rows_train)
-        writer_test = csv.DictWriter(f_test, field_names)
-        writer_test.writeheader()
-        writer_test.writerows(rows_test)
+    dump_data(output_root / "train.csv", rows_train)
+    dump_data(output_root / "test.csv", rows_test)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input_root", type=Path)
     parser.add_argument("output_root", type=Path)
+    parser.add_argument("--intermediate_root", type=Path)
+    parser.add_argument(
+        "--pretrained_language_identifier",
+        default="models/pretrained/lid.176.bin",
+    )
     args = parser.parse_args()
 
     args.output_root.mkdir(parents=True, exist_ok=True)
+    if args.intermediate_root:
+        args.intermediate_root.mkdir(parents=True, exist_ok=True)
 
-    preprocess_data_files(args.input_root, args.output_root)
+    LANGUAGE_IDENTIFIER = load_model(args.pretrained_language_identifier)
+
+    preprocess_data_files(
+        args.input_root, args.output_root, args.intermediate_root
+    )
