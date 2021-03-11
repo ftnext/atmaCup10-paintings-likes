@@ -89,6 +89,7 @@ if __name__ == "__main__":
         "dating_year_late",
         "size_h",
         "size_w",
+        *[f"description_tfidf_{i}" for i in range(50)],
     )
     X = {}
     for data_type in ("train", "test"):
