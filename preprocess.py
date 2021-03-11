@@ -5,8 +5,21 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+import nltk
 from fasttext import load_model
+from sklearn.decomposition import TruncatedSVD
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
+
+from custom_texthero import (
+    fillna,
+    lowercase,
+    remove_diacritics,
+    remove_digits,
+    remove_punctuation,
+    remove_stopwords_func,
+)
 
 
 def preprocess_numeric_values(rows, fields_types_map):
@@ -186,6 +199,71 @@ def preprocess_language_information(rows, fields):
     return features
 
 
+def normalize(raw_text, functions):
+    for func in functions:
+        raw_text = func(raw_text)
+    return raw_text
+
+
+def clean_text(raw_text):
+    cleansing_functions = (
+        fillna,
+        lowercase,
+        remove_diacritics,
+        remove_digits,
+        remove_punctuation,
+        remove_stopwords_func(CUSTOM_STOPWORDS),
+    )
+    return normalize(raw_text, cleansing_functions)
+
+
+def normalize_text_features(rows, fields):
+    features = []
+    for row in rows:
+        new_row = {}
+        for field in fields:
+            text = clean_text(row[field])
+            new_row[field] = text
+        features.append(new_row)
+    return features
+
+
+def create_tfidf_features(texts_train, texts_test):
+    pipeline = Pipeline(
+        [
+            ("tfidf", TfidfVectorizer(max_features=10000)),
+            ("svd", TruncatedSVD(n_components=50)),
+        ]
+    )
+    # TODO: len(pipeline.named_steps["tfidf"].vocabulary_) -> 18390
+    features_train = pipeline.fit_transform(texts_train)
+    features_test = pipeline.transform(texts_test)
+    return features_train, features_test
+
+
+def tfidf_to_row(tfidf_array, field):
+    features = []
+    for row in tfidf_array:
+        new_row = {}
+        for idx, value in enumerate(row):
+            new_row[f"{field}_tfidf_{idx}"] = value
+        features.append(new_row)
+    return features
+
+
+def convert_text_to_features(rows_train, rows_test, field):
+    texts_train = [row[field] for row in rows_train]
+    texts_test = [row[field] for row in rows_test]
+
+    features_train, features_test = create_tfidf_features(
+        texts_train, texts_test
+    )
+
+    return tfidf_to_row(features_train, field), tfidf_to_row(
+        features_test, field
+    )
+
+
 def merge(rows1, rows2):
     """
     >>> rows1 = [{"a": 100}, {"a": 50}]
@@ -287,10 +365,21 @@ def preprocess_data_files(input_root, output_root, intermediate_root=None):
         ),
     )
 
+    text_fields = ("description",)
+    normalized_train = normalize_text_features(rows_train, text_fields)
+    normalized_test = normalize_text_features(rows_test, text_fields)
+
     rows_train = preprocess(rows_train)
     rows_train = merge(rows_train, features_train)
     rows_test = preprocess(rows_test)
     rows_test = merge(rows_test, features_test)
+
+    for field in text_fields:
+        text_features_train, text_features_test = convert_text_to_features(
+            normalized_train, normalized_test, field
+        )
+        rows_train = merge(rows_train, text_features_train)
+        rows_test = merge(rows_test, text_features_test)
 
     dump_data(output_root / "train.csv", rows_train)
     dump_data(output_root / "test.csv", rows_test)
@@ -312,6 +401,9 @@ if __name__ == "__main__":
         args.intermediate_root.mkdir(parents=True, exist_ok=True)
 
     LANGUAGE_IDENTIFIER = load_model(args.pretrained_language_identifier)
+    CUSTOM_STOPWORDS = nltk.corpus.stopwords.words(
+        "dutch"
+    ) + nltk.corpus.stopwords.words("english")
 
     preprocess_data_files(
         args.input_root, args.output_root, args.intermediate_root
