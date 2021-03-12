@@ -299,11 +299,37 @@ def preprocess(rows):
         (preprocess_subtitle, ()),
         (
             preprocess_text_values,
-            ("title", "long_title", "sub_title", "more_title", "description"),
+            (
+                "title",
+                "long_title",
+                "sub_title",
+                "more_title",
+                "description",
+                "principal_maker",
+                "principal_or_first_maker",
+            ),
         ),
         (
             create_count_encoding_feature,
-            ("acquisition_method", "title", "principal_maker"),
+            (
+                "acquisition_method",
+                "title",
+                "principal_maker",
+                "art_series_id",
+                "description",
+                "long_title",
+                "principal_or_first_maker",
+                "sub_title",
+                "copyright_holder",
+                "more_title",
+                "acquisition_date",
+                "acquisition_credit_line",
+                "dating_presenting_date",
+                "dating_sorting_date",
+                "dating_period",
+                "dating_year_early",
+                "dating_year_late",
+            ),
         ),
     ]
 
@@ -398,6 +424,8 @@ def preprocess_data_files(input_root, output_root, intermediate_root=None):
         rows_train = merge(rows_train, text_features_train)
         rows_test = merge(rows_test, text_features_test)
 
+    print(f"train: ({len(rows_train)}, {len(rows_train[0])})")
+    print(f"test: ({len(rows_test)}, {len(rows_test[0])})")
     dump_data(output_root / "train.csv", rows_train)
     dump_data(output_root / "test.csv", rows_test)
 
