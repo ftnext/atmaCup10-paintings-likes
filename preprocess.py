@@ -85,6 +85,8 @@ def create_one_hot_encoding(rows_train, rows_test, fields_thresholds):
         categories = [
             item for item, count in counter.most_common() if count > threshold
         ]
+        if not categories:
+            continue
         encoder = OneHotEncoder(
             categories=[categories], handle_unknown="ignore"
         )
@@ -352,6 +354,7 @@ def preprocess_data_files(input_root, output_root, intermediate_root=None):
         dump_data(intermediate_root / "train.csv", rows_train)
         dump_data(intermediate_root / "test.csv", rows_test)
 
+    min_count = 20
     features_train, features_test = create_one_hot_encoding(
         rows_train,
         rows_test,
@@ -362,6 +365,20 @@ def preprocess_data_files(input_root, output_root, intermediate_root=None):
             ("long_title__lang", 10),
             ("more_title__lang", 10),
             ("description__lang", 10),
+            ("title", min_count),
+            ("description", min_count),
+            ("long_title", min_count),
+            ("principal_or_first_maker", min_count),
+            ("sub_title", min_count),
+            ("copyright_holder", min_count),
+            ("more_title", min_count),
+            ("acquisition_date", min_count),
+            ("acquisition_credit_line", min_count),
+            ("dating_presenting_date", min_count),
+            ("dating_sorting_date", min_count),
+            ("dating_period", min_count),
+            ("dating_year_early", min_count),
+            ("dating_year_late", min_count),
         ),
     )
 
