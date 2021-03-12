@@ -64,6 +64,7 @@ def visualize_importance(models, feature_columns, top_n=50):
     for i, model in enumerate(models):
         for c, i in zip(feature_columns, model.feature_importances_):
             feature_importance[c] += i
+    print(f"features count: {len(feature_importance)}")
     orders = sorted(
         feature_importance.items(), key=lambda d: d[1], reverse=True
     )
@@ -98,6 +99,8 @@ if __name__ == "__main__":
         )
     else:
         feature_columns = get_columns(args.features_root / f"{data_type}.csv")
+    print(f"train: {X['train'].shape}")
+    print(f"test: {X['test'].shape}")
 
     fold = KFold(n_splits=5, shuffle=True, random_state=71)
     cv = fold.split(X["train"], y)
