@@ -32,7 +32,7 @@ params = {
 }
 
 
-def fit_lgbm(X, y, cv, params=None, verbose=50):
+def fit_lgbm(X, y, cv, y_max=None, params=None, verbose=50):
     if params is None:
         params = {}
 
@@ -42,6 +42,10 @@ def fit_lgbm(X, y, cv, params=None, verbose=50):
     for i, (idx_train, idx_valid) in enumerate(cv):
         x_train, y_train = X[idx_train], y[idx_train]
         x_valid, y_valid = X[idx_valid], y[idx_valid]
+        # 最大値が決まっている場合、学習するデータだけyを丸める
+        if y_max is not None:
+            idx_use = y_train < y_max
+            y_train = np.where(idx_use, y_train, y_max)
 
         clf = lgbm.LGBMRegressor(**params)
         clf.fit(
