@@ -81,6 +81,7 @@ if __name__ == "__main__":
     parser.add_argument("features_root", type=Path)
     parser.add_argument("target_containing_file", type=Path)
     parser.add_argument("submission_root", type=Path)
+    parser.add_argument("--y_max", type=float)
     parser.add_argument("--check_y_max", action="store_true")
     args = parser.parse_args()
 
@@ -162,7 +163,12 @@ if __name__ == "__main__":
             print(key, score)
     else:
         oof, models = fit_lgbm(
-            X["train"], y, cv, params=lgbm_params, verbose=500
+            X["train"],
+            y,
+            cv,
+            y_max=args.y_max,
+            params=lgbm_params,
+            verbose=500,
         )
 
         pred = np.array([model.predict(X["test"]) for model in models])
