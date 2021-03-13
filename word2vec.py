@@ -6,6 +6,7 @@ import os
 import pickle
 import re
 from collections import defaultdict
+from itertools import combinations
 from pathlib import Path
 
 import numpy as np
@@ -27,18 +28,20 @@ def dump_pickle(file_path, data):
         pickle.dump(data, f)
 
 
-def build_vector_map(input_path, output_path, size, needs_normalize=False):
-    rows = load_data(input_path)
-    id_to_names = defaultdict(list)
-    for row in rows:
-        if needs_normalize:
-            normalized_name = re.sub(r"^\? ", "", row["name"])
-            if normalized_name not in id_to_names[row["object_id"]]:
-                # 先頭の?を外したあとのnameがすでに含まれていたら重複させない
-                id_to_names[row["object_id"]].append(normalized_name)
-        else:
-            # ex. "001020bd00b149970f78" -> ["oil paint (paint)", "panel"]
-            id_to_names[row["object_id"]].append(row["name"])
+def build_vector_map(input_root, output_root, combination_info):
+    size = max(c[1] for c in combination_info)
+    for data_name, _ in combination_info:
+        rows = load_data(input_root / f"{data_name}.csv")
+        id_to_names = defaultdict(list)
+        for row in rows:
+            if data_name == "production_place":
+                normalized_name = re.sub(r"^\? ", "", row["name"])
+                if normalized_name not in id_to_names[row["object_id"]]:
+                    # 先頭の?を外したあとのnameがすでに含まれていたら重複させない
+                    id_to_names[row["object_id"]].append(normalized_name)
+            else:
+                # ex. "001020bd00b149970f78" -> ["oil paint (paint)", "panel"]
+                id_to_names[row["object_id"]].append(row["name"])
 
     w2v_model = word2vec.Word2Vec(
         id_to_names.values(),
@@ -56,6 +59,9 @@ def build_vector_map(input_path, output_path, size, needs_normalize=False):
         vectors = [w2v_model.wv[name] for name in names]
         id_to_vector[object_id] = np.mean(vectors, axis=0)
 
+    data_combination = "__".join(c[0] for c in combination_info)
+    print(data_combination, vectors[0].shape)
+    output_path = output_root / f"{data_combination}.pkl"
     dump_pickle(output_path, id_to_vector)
 
 
@@ -66,18 +72,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     args.output_root.mkdir(parents=True, exist_ok=True)
+    names_data = (
+        ("material", 20),
+        ("object_collection", 3),
+        ("technique", 8),
+        ("production_place", 30),
+    )
+    names_combinations = []
+    for i in range(1, len(names_data) + 1):
+        names_combinations.extend(combinations(names_data, i))
 
-    for data_name, vector_size in tqdm(
-        (
-            ("material", 20),
-            ("object_collection", 3),
-            ("technique", 8),
-            ("production_place", 30),
-        )
-    ):
-        build_vector_map(
-            args.input_root / f"{data_name}.csv",
-            args.output_root / f"{data_name}.pkl",
-            vector_size,
-            data_name == "production_place",
-        )
+    for combination_info in tqdm(names_combinations):
+        build_vector_map(args.input_root, args.output_root, combination_info)
