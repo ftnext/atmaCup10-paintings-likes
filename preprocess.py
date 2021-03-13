@@ -1,5 +1,6 @@
 import argparse
 import csv
+import pickle
 import re
 from collections import Counter
 from pathlib import Path
@@ -371,8 +372,36 @@ def dump_data(file_path, rows):
         writer.writerows(rows)
 
 
+def load_pickle(file_path):
+    with file_path.open("rb") as fin:
+        return pickle.load(fin)
+
+
+def create_vector_features_with_map(rows, id_to_vector, data_name):
+    for vector in id_to_vector.values():
+        vector_length = len(vector)
+        break
+    features = []
+    for row in rows:
+        new_row = {}
+        if row["object_id"] in id_to_vector:
+            vector = id_to_vector[row["object_id"]]
+            for idx, v in enumerate(vector):
+                new_row[f"{data_name}_vector_{idx}"] = v
+        else:
+            for idx in range(vector_length):
+                new_row[f"{data_name}_vector_{idx}"] = ""
+        features.append(new_row)
+    return features
+
+
 def preprocess_data_files(
-    input_root, output_root, intermediate_root=None, merge_data_root=None
+    input_root,
+    output_root,
+    intermediate_root=None,
+    merge_map_data_root=None,
+    merge_map_data=None,
+    merge_sequential_data_root=None,
 ):
     rows_train = load_data(input_root / "train.csv")
     rows_test = load_data(input_root / "test.csv")
@@ -414,6 +443,23 @@ def preprocess_data_files(
     normalized_train = normalize_text_features(rows_train, text_fields)
     normalized_test = normalize_text_features(rows_test, text_fields)
 
+    vector_features_train = [{} for _ in range(len(rows_train))]
+    vector_features_test = [{} for _ in range(len(rows_test))]
+    if merge_map_data_root and merge_map_data:
+        for data_name in merge_map_data:
+            id_to_vector = load_pickle(
+                merge_map_data_root / f"{data_name}.pkl"
+            )
+            vector_train = create_vector_features_with_map(
+                rows_train, id_to_vector, data_name
+            )
+            vector_test = create_vector_features_with_map(
+                rows_test, id_to_vector, data_name
+            )
+            vector_features_train = merge(vector_features_train, vector_train)
+            vector_features_test = merge(vector_features_test, vector_test)
+
+    # 左辺のrows_trainは、特徴量にしない列が落ちている
     rows_train = preprocess(rows_train)
     rows_train = merge(rows_train, features_train)
     rows_test = preprocess(rows_test)
@@ -426,9 +472,12 @@ def preprocess_data_files(
         rows_train = merge(rows_train, text_features_train)
         rows_test = merge(rows_test, text_features_test)
 
-    if merge_data_root:
+    rows_train = merge(rows_train, vector_features_train)
+    rows_test = merge(rows_test, vector_features_test)
+
+    if merge_sequential_data_root:
         # 順番が揃っていることを仮定している
-        for data_root in merge_data_root:
+        for data_root in merge_sequential_data_root:
             train_data = load_data(data_root / "train.csv")
             test_data = load_data(data_root / "test.csv")
             rows_train = merge(rows_train, train_data)
@@ -445,7 +494,9 @@ if __name__ == "__main__":
     parser.add_argument("input_root", type=Path)
     parser.add_argument("output_root", type=Path)
     parser.add_argument("--intermediate_root", type=Path)
-    parser.add_argument("--merge_data_root", type=Path, nargs="*")
+    parser.add_argument("--merge_map_data_root", type=Path)
+    parser.add_argument("--merge_map_data", nargs="*")
+    parser.add_argument("--merge_sequential_data_root", type=Path, nargs="*")
     parser.add_argument(
         "--pretrained_language_identifier",
         default="models/pretrained/lid.176.bin",
@@ -465,5 +516,7 @@ if __name__ == "__main__":
         args.input_root,
         args.output_root,
         args.intermediate_root,
-        args.merge_data_root,
+        args.merge_map_data_root,
+        args.merge_map_data,
+        args.merge_sequential_data_root,
     )
