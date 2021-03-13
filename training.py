@@ -91,6 +91,7 @@ if __name__ == "__main__":
         "size_h",
         "size_w",
         *[f"description_tfidf_{i}" for i in range(50)],
+        # *[f"description_bert_vector_{i}" for i in range(768)],
     )
     X = {}
     for data_type in ("train", "test"):
