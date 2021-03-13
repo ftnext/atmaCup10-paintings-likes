@@ -2,7 +2,7 @@ import argparse
 import csv
 import pickle
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -395,6 +395,41 @@ def create_vector_features_with_map(rows, id_to_vector, data_name):
     return features
 
 
+def build_historical_person_map(input_path, min_count=30):
+    id_to_is_person = defaultdict(dict)
+    rows = load_data(input_path)
+    name_counter = Counter(row["name"] for row in rows)
+    names_over_min_count = set(
+        name for name, count in name_counter.items() if count >= min_count
+    )
+    for row in rows:
+        if row["name"] in names_over_min_count:
+            id_to_is_person[row["object_id"]][row["name"]] = 1
+    return id_to_is_person, names_over_min_count
+
+
+def create_person_one_hot_features(
+    rows, id_to_is_person, names_over_min_count
+):
+    features = []
+    for row in rows:
+        new_row = {}
+        for name in names_over_min_count:
+            if row["object_id"] in id_to_is_person:
+                if name in id_to_is_person[row["object_id"]]:
+                    new_row[f"historical_person={name}"] = id_to_is_person[
+                        row["object_id"]
+                    ][
+                        name
+                    ]  # same as 1
+                else:
+                    new_row[f"historical_person={name}"] = 0
+            else:
+                new_row[f"historical_person={name}"] = 0
+        features.append(new_row)
+    return features
+
+
 def preprocess_data_files(
     input_root,
     output_root,
@@ -459,6 +494,16 @@ def preprocess_data_files(
             vector_features_train = merge(vector_features_train, vector_train)
             vector_features_test = merge(vector_features_test, vector_test)
 
+    id_to_is_person, names_over_min_count = build_historical_person_map(
+        input_root / "historical_person.csv"
+    )
+    train_person_one_hot = create_person_one_hot_features(
+        rows_train, id_to_is_person, names_over_min_count
+    )
+    test_person_one_hot = create_person_one_hot_features(
+        rows_test, id_to_is_person, names_over_min_count
+    )
+
     # 左辺のrows_trainは、特徴量にしない列が落ちている
     rows_train = preprocess(rows_train)
     rows_train = merge(rows_train, features_train)
@@ -474,6 +519,9 @@ def preprocess_data_files(
 
     rows_train = merge(rows_train, vector_features_train)
     rows_test = merge(rows_test, vector_features_test)
+
+    rows_train = merge(rows_train, train_person_one_hot)
+    rows_test = merge(rows_test, test_person_one_hot)
 
     if merge_sequential_data_root:
         # 順番が揃っていることを仮定している
