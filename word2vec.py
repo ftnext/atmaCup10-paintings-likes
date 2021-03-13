@@ -1,0 +1,83 @@
+"""object_id, nameの形式のCSVについて、object_idごとに固定長のベクトル表現を作る"""
+
+import argparse
+import hashlib
+import os
+import pickle
+import re
+from collections import defaultdict
+from pathlib import Path
+
+import numpy as np
+from gensim.models import word2vec
+from tqdm import tqdm
+
+from preprocess import load_data
+
+os.environ["PYTHONHASHSEED"] = "0"
+N_ITER = 100
+
+
+def hashfxn(x):
+    return int(hashlib.md5(str(x).encode()).hexdigest(), 16)
+
+
+def dump_pickle(file_path, data):
+    with file_path.open("wb") as f:
+        pickle.dump(data, f)
+
+
+def build_vector_map(input_path, output_path, size, needs_normalize=False):
+    rows = load_data(input_path)
+    id_to_names = defaultdict(list)
+    for row in rows:
+        if needs_normalize:
+            normalized_name = re.sub(r"^\? ", "", row["name"])
+            if normalized_name not in id_to_names[row["object_id"]]:
+                # 先頭の?を外したあとのnameがすでに含まれていたら重複させない
+                id_to_names[row["object_id"]].append(normalized_name)
+        else:
+            # ex. "001020bd00b149970f78" -> ["oil paint (paint)", "panel"]
+            id_to_names[row["object_id"]].append(row["name"])
+
+    w2v_model = word2vec.Word2Vec(
+        id_to_names.values(),
+        size=size,
+        min_count=1,
+        window=1,
+        iter=N_ITER,
+        workers=1,
+        seed=42,
+        hashfxn=hashfxn,
+    )
+
+    id_to_vector = {}
+    for object_id, names in id_to_names.items():
+        vectors = [w2v_model.wv[name] for name in names]
+        id_to_vector[object_id] = np.mean(vectors, axis=0)
+
+    dump_pickle(output_path, id_to_vector)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input_root", type=Path)
+    parser.add_argument("output_root", type=Path)
+    args = parser.parse_args()
+
+    args.output_root.mkdir(parents=True, exist_ok=True)
+
+    for data_name, vector_size in tqdm(
+        (
+            ("material", 20),
+            ("object_collection", 3),
+            ("technique", 8),
+            ("production_place", 30),
+        )
+    ):
+        build_vector_map(
+            args.input_root / f"{data_name}.csv",
+            args.output_root / f"{data_name}.pkl",
+            vector_size,
+            data_name == "production_place",
+        )
