@@ -29,6 +29,22 @@ params = {
     # 特徴重要度計算のロジック
     "importance_type": "gain",
     "random_state": 71,
+    # 吟味している時間がないので、雑にbaselineを貼って値を上書き
+    "num_leaves": 32,
+    "min_data_in_leaf": 64,
+    "objective": "regression",
+    "max_depth": -1,
+    "learning_rate": 0.05,
+    "boosting": "gbdt",
+    "bagging_freq": 1,
+    "bagging_fraction": 0.8,
+    "bagging_seed": 0,
+    "verbosity": -1,
+    "reg_alpha": 0.1,
+    "reg_lambda": 0.3,
+    "colsample_bytree": 0.7,
+    "metric": "rmse",
+    "num_threads": 6,
 }
 
 
