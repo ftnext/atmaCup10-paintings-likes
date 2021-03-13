@@ -8,6 +8,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import KFold
 from tqdm import tqdm
 
@@ -80,6 +81,7 @@ if __name__ == "__main__":
     parser.add_argument("features_root", type=Path)
     parser.add_argument("target_containing_file", type=Path)
     parser.add_argument("submission_root", type=Path)
+    parser.add_argument("--check_y_max", action="store_true")
     args = parser.parse_args()
 
     args.submission_root.mkdir(parents=True, exist_ok=True)
@@ -138,25 +140,46 @@ if __name__ == "__main__":
     print(f"test: {X['test'].shape}")
 
     fold = KFold(n_splits=5, shuffle=True, random_state=71)
-    cv = fold.split(X["train"], y)
+    cv = list(fold.split(X["train"], y))
 
-    oof, models = fit_lgbm(X["train"], y, cv, params=lgbm_params, verbose=500)
+    if args.check_y_max:
+        out_of_folds = {}
+        for y_max in [5.5, 6.0, 6.5, 7.0, 7.5, 8.0, None]:
+            oof, _ = fit_lgbm(
+                X["train"],
+                y,
+                cv,
+                y_max=y_max,
+                params=lgbm_params,
+                verbose=None,
+            )
+            out_of_folds[y_max] = oof
+        scores = []
+        for key, value in out_of_folds.items():
+            score_i = mean_squared_error(y, value) ** 0.5
+            scores += [(key, score_i)]
+        for key, score in sorted(scores, key=lambda d: d[1]):
+            print(key, score)
+    else:
+        oof, models = fit_lgbm(
+            X["train"], y, cv, params=lgbm_params, verbose=500
+        )
 
-    pred = np.array([model.predict(X["test"]) for model in models])
-    pred = np.mean(pred, axis=0)
-    pred = revert_to_real(pred)
+        pred = np.array([model.predict(X["test"]) for model in models])
+        pred = np.mean(pred, axis=0)
+        pred = revert_to_real(pred)
 
-    submission_file_name = (
-        f"{datetime.now():%Y%m%d-%H%M%S}_"
-        f"{re.sub('/', '_', str(args.features_root))}"
-    )
-    submission_file = args.submission_root / f"{submission_file_name}.csv"
-    with submission_file.open("w") as f:
-        writer = csv.writer(f)
-        writer.writerow(["likes"])
-        writer.writerows([p] for p in pred.tolist())
+        submission_file_name = (
+            f"{datetime.now():%Y%m%d-%H%M%S}_"
+            f"{re.sub('/', '_', str(args.features_root))}"
+        )
+        submission_file = args.submission_root / f"{submission_file_name}.csv"
+        with submission_file.open("w") as f:
+            writer = csv.writer(f)
+            writer.writerow(["likes"])
+            writer.writerows([p] for p in pred.tolist())
 
-    fig, ax = visualize_oof_pred_distribution(oof, np.log1p(pred))
-    fig.savefig(args.submission_root / f"{submission_file_name}.png")
+        fig, ax = visualize_oof_pred_distribution(oof, np.log1p(pred))
+        fig.savefig(args.submission_root / f"{submission_file_name}.png")
 
-    visualize_importance(models, feature_columns)
+        visualize_importance(models, feature_columns)
