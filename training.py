@@ -96,6 +96,35 @@ if __name__ == "__main__":
         *[f"object_collection_vector_{i}" for i in range(3)],
         *[f"technique_vector_{i}" for i in range(8)],
         *[f"production_place_vector_{i}" for i in range(30)],
+        *[f"material__object_collection_vector_{i}" for i in range(20)],
+        *[f"material__technique_vector_{i}" for i in range(20)],
+        *[f"material__production_place_vector_{i}" for i in range(30)],
+        *[f"object_collection__technique_vector_{i}" for i in range(8)],
+        *[
+            f"object_collection__production_place_vector_{i}"
+            for i in range(30)
+        ],
+        *[f"technique__production_place_vector_{i}" for i in range(30)],
+        *[
+            f"material__object_collection__technique_vector_{i}"
+            for i in range(20)
+        ],
+        *[
+            f"material__object_collection__production_place_vector_{i}"
+            for i in range(30)
+        ],
+        *[
+            f"material__technique__production_place_vector_{i}"
+            for i in range(30)
+        ],
+        *[
+            f"object_collection__technique__production_place_vector_{i}"
+            for i in range(30)
+        ],
+        *[
+            f"material__object_collection__technique__production_place_vector_{i}"
+            for i in range(30)
+        ],
         # *[f"description_bert_vector_{i}" for i in range(768)],
     )
     X = {}
