@@ -371,7 +371,9 @@ def dump_data(file_path, rows):
         writer.writerows(rows)
 
 
-def preprocess_data_files(input_root, output_root, intermediate_root=None):
+def preprocess_data_files(
+    input_root, output_root, intermediate_root=None, merge_data_root=None
+):
     rows_train = load_data(input_root / "train.csv")
     rows_test = load_data(input_root / "test.csv")
 
@@ -424,6 +426,14 @@ def preprocess_data_files(input_root, output_root, intermediate_root=None):
         rows_train = merge(rows_train, text_features_train)
         rows_test = merge(rows_test, text_features_test)
 
+    if merge_data_root:
+        # 順番が揃っていることを仮定している
+        for data_root in merge_data_root:
+            train_data = load_data(data_root / "train.csv")
+            test_data = load_data(data_root / "test.csv")
+            rows_train = merge(rows_train, train_data)
+            rows_test = merge(rows_test, test_data)
+
     print(f"train: ({len(rows_train)}, {len(rows_train[0])})")
     print(f"test: ({len(rows_test)}, {len(rows_test[0])})")
     dump_data(output_root / "train.csv", rows_train)
@@ -435,6 +445,7 @@ if __name__ == "__main__":
     parser.add_argument("input_root", type=Path)
     parser.add_argument("output_root", type=Path)
     parser.add_argument("--intermediate_root", type=Path)
+    parser.add_argument("--merge_data_root", type=Path, nargs="*")
     parser.add_argument(
         "--pretrained_language_identifier",
         default="models/pretrained/lid.176.bin",
@@ -451,5 +462,8 @@ if __name__ == "__main__":
     ) + nltk.corpus.stopwords.words("english")
 
     preprocess_data_files(
-        args.input_root, args.output_root, args.intermediate_root
+        args.input_root,
+        args.output_root,
+        args.intermediate_root,
+        args.merge_data_root,
     )
