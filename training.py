@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from sklearn.model_selection import KFold
+from tqdm import tqdm
 
 from models.lightgbm import fit_lgbm
 from models.lightgbm import params as lgbm_params
@@ -25,7 +26,7 @@ def load_features(input_path, float_fields):
     data = []
     with input_path.open() as f:
         reader = csv.DictReader(f)
-        for row in reader:
+        for row in tqdm(reader):
             array = []
             for key, value in row.items():
                 if not value:
@@ -91,6 +92,10 @@ if __name__ == "__main__":
         "size_h",
         "size_w",
         *[f"description_tfidf_{i}" for i in range(50)],
+        *[f"material_vector_{i}" for i in range(20)],
+        *[f"object_collection_vector_{i}" for i in range(3)],
+        *[f"technique_vector_{i}" for i in range(8)],
+        *[f"production_place_vector_{i}" for i in range(30)],
         # *[f"description_bert_vector_{i}" for i in range(768)],
     )
     X = {}
