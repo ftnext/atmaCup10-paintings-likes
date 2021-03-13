@@ -79,7 +79,7 @@ if __name__ == "__main__":
         ("production_place", 30),
     )
     names_combinations = []
-    for i in range(1, len(names_data) + 1):
+    for i in range(1, 2 + 1):  # 2つの組合せに留める
         names_combinations.extend(combinations(names_data, i))
 
     for combination_info in tqdm(names_combinations):
