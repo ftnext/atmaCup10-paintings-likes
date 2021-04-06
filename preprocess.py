@@ -1,5 +1,4 @@
 import argparse
-import csv
 import pickle
 import re
 from collections import Counter, defaultdict
@@ -19,7 +18,7 @@ from custom_texthero import (
     remove_punctuation,
     remove_stopwords_func,
 )
-from feature_factory.data_io import load_data
+from feature_factory.data_io import dump_data, load_data
 from feature_factory.language import LanguageIdentifier
 
 
@@ -343,14 +342,6 @@ def add_features(rows_train, rows_test):
         new_rows = merge(rows, new_features)
         added[key] = new_rows
     return added["train"], added["test"]
-
-
-def dump_data(file_path, rows):
-    field_names = rows[0].keys()
-    with file_path.open("w") as fout:
-        writer = csv.DictWriter(fout, field_names)
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def load_pickle(file_path):
