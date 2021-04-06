@@ -19,6 +19,7 @@ from custom_texthero import (
     remove_punctuation,
     remove_stopwords_func,
 )
+from feature_factory.data_io import load_data
 from feature_factory.language import LanguageIdentifier
 
 
@@ -342,12 +343,6 @@ def add_features(rows_train, rows_test):
         new_rows = merge(rows, new_features)
         added[key] = new_rows
     return added["train"], added["test"]
-
-
-def load_data(file_path):
-    with file_path.open() as fin:
-        reader = csv.DictReader(fin)
-        return list(reader)
 
 
 def dump_data(file_path, rows):
