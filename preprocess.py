@@ -4,10 +4,8 @@ import pickle
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Optional
 
 import nltk
-from fasttext import load_model
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import Pipeline
@@ -21,6 +19,7 @@ from custom_texthero import (
     remove_punctuation,
     remove_stopwords_func,
 )
+from feature_factory.language import LanguageIdentifier
 
 
 def preprocess_numeric_values(rows, fields_types_map):
@@ -176,19 +175,6 @@ def preprocess_subtitle(rows):
         new_row = {"size_h": height or "", "size_w": width or ""}
         features.append(new_row)
     return features
-
-
-def identify_language(text: str) -> Optional[str]:
-    """
-    >>> identify_language("Still Life")  # doctest: +SKIP
-    '__label__en'
-    >>> identify_language("")
-    """
-    if text == "":
-        return None  # ""はEnglishとして判定された（誤りになりそう）
-    # \nを含むと ValueError: predict processes one line at a time (remove '\n')
-    pred = LANGUAGE_IDENTIFIER.predict(re.sub("\n", " ", text))
-    return pred[0][0]
 
 
 def preprocess_language_information(rows, fields):
@@ -555,7 +541,11 @@ if __name__ == "__main__":
     if args.intermediate_root:
         args.intermediate_root.mkdir(parents=True, exist_ok=True)
 
-    LANGUAGE_IDENTIFIER = load_model(args.pretrained_language_identifier)
+    identifier = LanguageIdentifier.create_from(
+        args.pretrained_language_identifier
+    )
+    identify_language = identifier.identify  # リファクタリング中でも動くようにする措置
+
     CUSTOM_STOPWORDS = nltk.corpus.stopwords.words(
         "dutch"
     ) + nltk.corpus.stopwords.words("english")
